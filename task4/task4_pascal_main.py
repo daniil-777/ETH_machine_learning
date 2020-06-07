@@ -5,6 +5,8 @@ from tensorflow.keras import backend as K
 from tensorflow import keras
 import tensorflow as tf
 import numpy as np
+from pathlib import Path
+
 
 import task4_pascal_io as io4
 
@@ -22,6 +24,7 @@ def construct_imagenet_model():
 def lambda_output_shape(shapes):
 	return (shapes[0][0], 1)
 
+# Taken from https://keras.io/examples/mnist_siamese/
 def euclidean_distance_lambda(vects):
 	x, y = vects
 	sum_square = K.sum(K.square(x - y), axis=1, keepdims=True)
@@ -39,9 +42,13 @@ def construct_distance_layer(name):
 	)
 
 def construct_branch_layers(input_shape):
+	dropout_rate = 0.2
+
 	inp = keras.Input(shape=input_shape)
 	branch_inner = keras.layers.Dense(64, name='branch_inner_1', activation='relu')(inp)
+	branch_inner = keras.layers.Dropout(dropout_rate, name='branch_dropout_1')(branch_inner)
 	branch_inner = keras.layers.Dense(32, name='branch_inner_2', activation='relu')(branch_inner)
+	branch_inner = keras.layers.Dropout(dropout_rate, name='branch_dropout_2')(branch_inner)
 	branch_output = keras.layers.Dense(16, name='branch_out')(branch_inner)
 	return Model(
 		inputs = inp,
@@ -88,6 +95,7 @@ def assemble_triplets(data, data_flipped, triplets, use_flipped=False):
 	# combinations is all 8 elements of the cartesian product of three bools, it's used
 	# to select whether to use a normal or a flipped image for A,B,C.
 	# After that we just return those 8 rows per triplet
+	# If use_flipped is false then just 1 row is returned per triplet
 
 	combinations = [[0,0,0]]
 	if use_flipped:
@@ -107,7 +115,7 @@ def apply_imagenet_to_dataset():
 	out_flipped = imagenet_model.predict(images_flipped)
 	np.save('imagenet_flipped.npy', out_flipped)
 
-def train_model(imagenet_rep, imagenet_rep_flipped, train_triplets):
+def create_and_train_model(imagenet_rep, imagenet_rep_flipped, train_triplets):
 	model = construct_siamese_model()
 	model.compile(
 		optimizer=keras.optimizers.Adam(1e-3),
@@ -119,25 +127,28 @@ def train_model(imagenet_rep, imagenet_rep_flipped, train_triplets):
 
 	# It can take a while to train the model, so we save the weights and can load
 	# them again later.
-	load_saved_weights = True
+	load_saved_weights = False
+	weights_dir = 'weights/'
 
 	if load_saved_weights:
-		saved_weights = [np.load('weights/w{}.npy'.format(i)) for i in range(6)]
+		saved_weights = [np.load(weights_dir + 'w{}.npy'.format(i)) for i in range(6)]
 		model.set_weights(saved_weights)
 	else:
 		model.fit(
 			x=x,
 			y=y,
 			batch_size=32,
-			epochs=6,
+			epochs=5,
 			verbose=1,
 			callbacks=None,
 			validation_split=0.1,
 			shuffle=True,
 		)
 
+		Path(weights_dir).mkdir(parents=True, exist_ok=True)
 		w = model.get_weights()
-		[np.save('weights/w{}'.format(i),w[i]) for i in range(6)]
+		for i in range(6):
+			np.save(weights_dir + 'w{}.npy'.format(i),w[i])
 
 	return model
 
@@ -149,7 +160,7 @@ def main():
 	train_triplets = io4.get_triplets('train_triplets.txt')
 	test_triplets = io4.get_triplets('test_triplets.txt')
 
-	model = train_model(imagenet_rep, imagenet_rep_flipped, train_triplets)
+	model = create_and_train_model(imagenet_rep, imagenet_rep_flipped, train_triplets)
 
 	dist_model = Model(
 		inputs = model.input,
@@ -157,7 +168,8 @@ def main():
 	)
 
 	[ab, ac] = dist_model(
-		assemble_triplets(imagenet_rep, imagenet_rep_flipped, test_triplets, use_flipped=False)
+		assemble_triplets(imagenet_rep, imagenet_rep_flipped, test_triplets, use_flipped=False),
+		training=False
 	)
 
 	# Task output specification
