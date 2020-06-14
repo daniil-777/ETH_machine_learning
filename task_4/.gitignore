@@ -1,0 +1,4 @@
+*.zip
+weights*/
+out.csv
+__pycache__/

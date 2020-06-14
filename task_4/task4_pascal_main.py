@@ -32,7 +32,7 @@ def euclidean_distance_lambda(vects):
 
 def distance_comparison_lambda(inputs):
 	ab, ac = inputs
-	return K.clip(ab/(ac + K.epsilon()) - 0.8, min_value=0, max_value=None)
+	return K.clip(ab/(ac + K.epsilon()) - 0.6, min_value=0, max_value=None)
 
 def construct_distance_layer(name):
 	return keras.layers.Lambda(
@@ -42,10 +42,10 @@ def construct_distance_layer(name):
 	)
 
 def construct_branch_layers(input_shape):
-	dropout_rate = 0.2
+	dropout_rate = 0.20
 
 	inp = keras.Input(shape=input_shape)
-	branch_inner = keras.layers.Dense(64, name='branch_inner_1', activation='relu')(inp)
+	branch_inner = keras.layers.Dense(64, name='branch_inner_1', activation='relu', kernel_regularizer=keras.regularizers.l1(0.001))(inp)
 	branch_inner = keras.layers.Dropout(dropout_rate, name='branch_dropout_1')(branch_inner)
 	branch_inner = keras.layers.Dense(32, name='branch_inner_2', activation='relu')(branch_inner)
 	branch_inner = keras.layers.Dropout(dropout_rate, name='branch_dropout_2')(branch_inner)
@@ -109,11 +109,11 @@ def apply_imagenet_to_dataset():
 
 	images = io4.get_all_images()
 	out = imagenet_model.predict(images)
-	np.save('imagenet.npy', out)
+	np.save('data_processed/imagenet.npy', out)
 
 	images_flipped = io4.get_all_images_flipped()
 	out_flipped = imagenet_model.predict(images_flipped)
-	np.save('imagenet_flipped.npy', out_flipped)
+	np.save('data_processed/imagenet_flipped.npy', out_flipped)
 
 def create_and_train_model(imagenet_rep, imagenet_rep_flipped, train_triplets):
 	model = construct_siamese_model()
@@ -138,10 +138,10 @@ def create_and_train_model(imagenet_rep, imagenet_rep_flipped, train_triplets):
 			x=x,
 			y=y,
 			batch_size=32,
-			epochs=5,
+			epochs=10,
 			verbose=1,
 			callbacks=None,
-			validation_split=0.1,
+			validation_split=.0,
 			shuffle=True,
 		)
 
@@ -154,8 +154,8 @@ def create_and_train_model(imagenet_rep, imagenet_rep_flipped, train_triplets):
 
 
 def main():
-	imagenet_rep = np.load('imagenet.npy')
-	imagenet_rep_flipped = np.load('imagenet_flipped.npy')
+	imagenet_rep = np.load('data_processed/imagenet.npy')
+	imagenet_rep_flipped = np.load('data_processed/imagenet_flipped.npy')
 
 	train_triplets = io4.get_triplets('train_triplets.txt')
 	test_triplets = io4.get_triplets('test_triplets.txt')
@@ -180,7 +180,6 @@ def main():
 	np.savetxt('out.csv', output.astype(int), fmt='%i')
 
 	print("\n\ndone")
-
 
 
 
