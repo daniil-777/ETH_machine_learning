@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torchvision import models,transforms
-from PIL import Image
+from PIL import Image, ImageOps
 import numpy as np
 
 # adapted from https://github.com/Prakhar998/Food-Classification
@@ -27,26 +27,32 @@ def get_image(image_name):
 def torch_to_np(torch_tensor):
 	return torch_tensor.detach().numpy()
 
-def process_image(image_number, model):
-	print('image nr:', image_number)
+def process_image(image_number, model, flip=False):
+	print('processing image {}, {}flipped'.format(image_number, '' if flip else 'not '))
 	images_dir = '../data/food/'
 	image = get_image(images_dir + "/{:05d}.jpg".format(image_number))
-	return torch_to_np(model(image))[0]
+	if flip:
+		return torch_to_np(model(torch.flip(image, [3])))[0]
+	else:
+		return torch_to_np(model(image))[0]
 
 inner_values = []
 def layer_hook(m, i, o):
 	inner_values.append(torch_to_np(o)[0])
 
 model = get_model()
+
+# Record the values on the second to last layer. Sure there might be
+# more elegant ways to do this in pytorch but this works.
 list(model.classifier.children())[0].register_forward_hook(layer_hook)
 
 nr_images = 10000
-outputs = np.array([
-	process_image(i, model) for i in range(nr_images)
-])
 
-# Layer before last
+# We don't care about the output, the interesting values are captured
+# via layer_hook.
+[process_image(i, model, flip=False) for i in range(nr_images)]
 np.save('preprocessed_inner_layer.npy', np.array(inner_values))
 
-# Last layer
-# np.save('preprocessed_output_layer.npy', outputs)
+inner_values = []
+[process_image(i, model, flip=True) for i in range(nr_images)]
+np.save('preprocessed_inner_layer_flipped.npy', np.array(inner_values))
