@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 
-from tensorflow.keras.applications.resnet50 import ResNet50, preprocess_input #, decode_predictions
-from tensorflow.keras.preprocessing import image
+from tensorflow.keras.applications.resnet50 import ResNet50, preprocess_input
 from tensorflow.keras.models import Model
 from tensorflow.keras import backend as K
 from tensorflow import keras
@@ -9,8 +8,7 @@ import tensorflow as tf
 import numpy as np
 from pathlib import Path
 
-
-import task4_pascal_io as io4
+import task4_io as io4
 
 def construct_imagenet_model():
 	pretrained_model = ResNet50(weights='imagenet')
@@ -117,20 +115,20 @@ def apply_imagenet_to_dataset():
 
 	images = io4.get_all_images()
 	out = imagenet_model.predict(images)
-	np.save('data_processed/imagenet.npy', out)
+	np.save(io4.data_processed_path + 'imagenet_food.npy', out)
 
-	images_flipped = io4.get_all_images_flipped()
-	out_flipped = imagenet_model.predict(images_flipped)
-	np.save('data_processed/imagenet_flipped.npy', out_flipped)
+	# images_flipped = io4.get_all_images_flipped()
+	# out_flipped = imagenet_model.predict(images_flipped)
+	# np.save(io4.data_processed_path + 'imagenet_food_flipped.npy', out_flipped)
 
-def create_and_train_model(imagenet_rep, imagenet_rep_flipped, train_triplets, use_flipped):
-	model = construct_siamese_model(np.shape(imagenet_rep))
+def create_and_train_model(food_data, food_data_flipped, train_triplets, use_flipped):
+	model = construct_siamese_model(np.shape(food_data))
 	model.compile(
 		optimizer=keras.optimizers.Adam(1e-3),
 		loss=keras.losses.MeanAbsoluteError(),
 	)
 
-	x = assemble_triplets(imagenet_rep, imagenet_rep_flipped, train_triplets, use_flipped)
+	x = assemble_triplets(food_data, food_data_flipped, train_triplets, use_flipped)
 	y = np.zeros(shape=(x[0].shape[0], 1))
 
 	# It can take a while to train the model, so we save the weights and can load
@@ -162,20 +160,14 @@ def create_and_train_model(imagenet_rep, imagenet_rep_flipped, train_triplets, u
 
 
 def main():
-	uf = True
-
-	imagenet_rep = np.load('data_processed/imagenet.npy')
-	torch_rep = np.load('torch_preprocessor/preprocessed_inner.npy')
-	rep = np.concatenate((imagenet_rep, torch_rep), axis=1)
-
-	imagenet_rep_flipped = np.load('data_processed/imagenet_flipped.npy')
-	torch_rep_flipped = np.load('torch_preprocessor/preprocessed_inner_layer_flipped.npy')
-	rep_flipped = np.concatenate((imagenet_rep_flipped, torch_rep_flipped), axis=1)
+	imagenet_food = np.load(io4.data_processed_path + 'imagenet_food.npy')
+	torch_food = np.load(io4.data_processed_path + 'torch_food.npy')
+	all_food_data = np.concatenate((imagenet_food, torch_food), axis=1)
 
 	train_triplets = io4.get_triplets('train_triplets.txt')
 	test_triplets = io4.get_triplets('test_triplets.txt')
 
-	model = create_and_train_model(rep, rep_flipped, train_triplets, use_flipped=uf)
+	model = create_and_train_model(all_food_data, None, train_triplets, use_flipped=False)
 
 	dist_model = Model(
 		inputs = model.input,
@@ -183,7 +175,7 @@ def main():
 	)
 
 	[ab, ac] = dist_model(
-		assemble_triplets(rep, None, test_triplets, use_flipped=uf),
+		assemble_triplets(all_food_data, None, test_triplets, use_flipped=False),
 		training=False
 	)
 
@@ -196,17 +188,9 @@ def main():
 
 	print("\n\ndone")
 
+if __name__ == '__main__':
+	# generate the files imagenet_food.npy
+	apply_imagenet_to_dataset()
 
-
-################################################################################
-################################################################################
-#######
-#######   change stuff here:
-#######
-
-# Uncommet this function to generate the files imagenet.npy and imagenet_flipped.npy
-# apply_imagenet_to_dataset()
-
-# Uncomment this function once the files imagenet.npy and imagenet_flipped.npy are created
-# to train and evaluate the model
-main()
+	# train and evaluate the model
+	main()

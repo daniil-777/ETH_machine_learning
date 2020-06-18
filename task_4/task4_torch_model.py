@@ -1,8 +1,16 @@
+#!/usr/bin/python3
+
+# tested with these library versions:
+#     torch: 1.5.0
+#     torchvision: 0.7.0a0+148bac2
+#     PIL: 6.2.1
+
 import torch
 import torch.nn as nn
 from torchvision import models,transforms
-from PIL import Image, ImageOps
+from PIL import Image
 import numpy as np
+from pathlib import Path
 
 # adapted from https://github.com/Prakhar998/Food-Classification
 # Download food_classifier.pt from https://github.com/Prakhar998/Food-Classification/raw/master/food_classifier.pt
@@ -14,6 +22,7 @@ def get_model():
 	model.eval()
 	return model
 
+# Returns a torch tensor
 def get_image(image_name):
 	my_transforms=transforms.Compose([
 		transforms.Resize(255),
@@ -27,32 +36,28 @@ def get_image(image_name):
 def torch_to_np(torch_tensor):
 	return torch_tensor.detach().numpy()
 
-def process_image(image_number, model, flip=False):
-	print('processing image {}, {}flipped'.format(image_number, '' if flip else 'not '))
-	images_dir = '../data/food/'
-	image = get_image(images_dir + "/{:05d}.jpg".format(image_number))
-	if flip:
-		return torch_to_np(model(torch.flip(image, [3])))[0]
-	else:
-		return torch_to_np(model(image))[0]
+def process_image(image_number, model):
+	print('image nr:', image_number)
+	image = get_image('data/food/{:05d}.jpg'.format(image_number))
+	model(image)
 
-inner_values = []
+inner_layer_values = []
 def layer_hook(m, i, o):
-	inner_values.append(torch_to_np(o)[0])
+	inner_layer_values.append(torch_to_np(o)[0])
 
 model = get_model()
 
-# Record the values on the second to last layer. Sure there might be
-# more elegant ways to do this in pytorch but this works.
+# We extract the values from the first layer of `classifier`. dimension 1024
 list(model.classifier.children())[0].register_forward_hook(layer_hook)
 
 nr_images = 10000
 
-# We don't care about the output, the interesting values are captured
-# via layer_hook.
-[process_image(i, model, flip=False) for i in range(nr_images)]
-np.save('preprocessed_inner_layer.npy', np.array(inner_values))
+# We don't care about the output of the model, instead we capture all the information
+# that we need with layer_hook. There might be nicer ways to do this in pytorch but
+# I don't care, this works.
+for i in range(nr_images):
+	process_image(i, model)
 
-inner_values = []
-[process_image(i, model, flip=True) for i in range(nr_images)]
-np.save('preprocessed_inner_layer_flipped.npy', np.array(inner_values))
+output_dir = 'data_processed'
+Path(output_dir).mkdir(parents=True, exist_ok=True)
+np.save(output_dir + '/torch_food.npy', np.array(inner_layer_values))

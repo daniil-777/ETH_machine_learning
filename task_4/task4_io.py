@@ -4,11 +4,11 @@ import numpy as np
 import pandas as pd
 
 data_path = './data/'
+data_processed_path = './data_processed/'
 nr_images = 10000
 
 def get_triplets(filename):
 	path = data_path + filename
-	# we can't use to_numpy because piz daint only has pandas 0.23.3
 	data = np.array(pd.read_csv(path, sep=' ', header=None).values)
 	assert(data.ndim == 2)
 	assert(data.shape[1] == 3)
