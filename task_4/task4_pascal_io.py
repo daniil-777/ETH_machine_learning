@@ -18,11 +18,9 @@ def get_image(img_path):
 	img = image.load_img(img_path, target_size=(224, 224))
 	return image.img_to_array(img)
 
-def image_name(nr):
-	return data_path + "food/{:05d}.jpg".format(nr)
-
 def get_image_nr(nr):
-	return get_image(image_name(nr))
+	img_path = data_path + "food/{:05d}.jpg".format(nr)
+	return get_image(img_path)
 
 def flip(img):
 	return img[:,::-1]
